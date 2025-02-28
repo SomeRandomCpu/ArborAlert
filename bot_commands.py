@@ -28,10 +28,28 @@ async def setup_command(bot, interaction):
         # Save credentials
         save_user_credentials(str(interaction.user.id), username, password)
 
+        # Send welcome message
         await interaction.user.send("# Welcome to ArborAlert, a bot that notifies you to do your homework\n"
         "You've successfully set up the bot! 🎉\n"
         "Please delete the messages where you sent your username and password for security. The bot fetches your homework automatically once a day, but you can run it manually by using the /fetch command.\n"
         "Send a message in the arboralert-support channel if you have any issues!")
+
+        # Automatically fetch homework after setup
+        try:
+            process_arbor_data(str(interaction.user.id))
+            
+            # Read and send the processed text
+            with open("arbor_processed_text.txt", "r", encoding="utf-8") as file:
+                text = file.read()
+            await interaction.user.send(f"Here are your current assignments:\n\n{text}")
+        except Exception as e:
+            await interaction.user.send(f"Note: Could not automatically fetch your assignments: {e}\nYou can try manually using the /fetch command.")
+        finally:
+            # Cleanup temporary files
+            if os.path.exists("arbor_text.txt"):
+                os.remove("arbor_text.txt")
+            if os.path.exists("arbor_processed_text.txt"):
+                os.remove("arbor_processed_text.txt")
     except Exception as e:
         await interaction.user.send(f"An error occurred: {e}")
 
