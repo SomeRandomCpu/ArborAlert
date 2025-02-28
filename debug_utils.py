@@ -3,6 +3,7 @@ import sqlite3
 import os
 import datetime
 import traceback
+import asyncio
 from cryptography.fernet import Fernet
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
@@ -18,6 +19,10 @@ class DebugTests:
         self.results = []
         self.success_count = 0
         self.fail_count = 0
+        self.total_tests = 0
+        self.current_test = 0
+        self.interaction = None
+        self.progress_message = None
     
     def add_result(self, test_name, success, message):
         status = "✅ PASS" if success else "❌ FAIL"
@@ -26,32 +31,232 @@ class DebugTests:
             self.success_count += 1
         else:
             self.fail_count += 1
+        
+        # Update progress
+        self.current_test += 1
+        asyncio.create_task(self.update_progress())
+    
+    async def update_progress(self):
+        if self.interaction and self.progress_message:
+            # Cap progress at 100%
+            progress_percent = min((self.current_test / self.total_tests * 100), 100) if self.total_tests > 0 else 0
+            bar_length = 20
+            filled_length = int(bar_length * progress_percent / 100)
+            progress_bar = "🟩" * filled_length + "⬜" * (bar_length - filled_length)
+            
+            status_text = f"🔄 **Running Diagnostics:** {self.current_test}/{self.total_tests} tests completed\n"
+            status_text += f"┌─────────────────────────────────────┐\n"
+            status_text += f"│ 🟢 **Passed:** {self.success_count} | 🔴 **Failed:** {self.fail_count} │\n"
+            # Ensure consistent spacing for percentage display
+            progress_display = f"{progress_percent:.1f}%"
+            padding = ' ' * (14 - len(progress_display))
+            status_text += f"│ 📊 **Progress:** {progress_display}{padding}│\n"
+            status_text += f"│ {progress_bar} │\n"
+            status_text += f"└─────────────────────────────────────┘\n"
+            
+            try:
+                await self.progress_message.edit(content=status_text)
+            except:
+                pass  # Ignore errors if message can't be edited
     
     def get_summary(self):
-        summary = f"__**Debug Test Results**__\n\n"
-        summary += f"Tests passed: {self.success_count}\n"
-        summary += f"Tests failed: {self.fail_count}\n\n"
+        # Calculate success percentage
+        total_tests = self.success_count + self.fail_count
+        success_percentage = (self.success_count / total_tests * 100) if total_tests > 0 else 0
+        
+        # Create a visual progress bar
+        bar_length = 20
+        filled_length = int(bar_length * success_percentage / 100)
+        progress_bar = "🟩" * filled_length + "⬜" * (bar_length - filled_length)
+        
+        # Create a header with emoji
+        summary = f"🔍 **ARBORALERT DIAGNOSTIC REPORT** 🔍\n\n"
+        
+        # Add status overview with emojis and formatting
+        summary += f"**Status Overview:**\n"
+        summary += f"┌─────────────────────────────────────┐\n"
+        summary += f"│ 🟢 **Tests Passed:** {self.success_count} | 🔴 **Tests Failed:** {self.fail_count} │\n"
+        summary += f"│ 📊 **Success Rate:** {success_percentage:.1f}%              │\n"
+        summary += f"│ {progress_bar} │\n"
+        summary += f"└─────────────────────────────────────┘\n\n"
+        
+        # Group results by category
+        database_tests = []
+        connection_tests = []
+        system_tests = []
+        user_tests = []
         
         for result in self.results:
-            summary += f"{result}\n"
+            if "Database" in result:
+                database_tests.append(result)
+            elif "Connection" in result or "Selenium" in result:
+                connection_tests.append(result)
+            elif "File" in result or "Environment" in result:
+                system_tests.append(result)
+            else:
+                user_tests.append(result)
+        
+        # Add results by category with emoji headers
+        if system_tests:
+            summary += f"⚙️ **SYSTEM TESTS**\n"
+            summary += "```\n"
+            for result in system_tests:
+                summary += f"{result}\n"
+            summary += "```\n\n"
             
+        if database_tests:
+            summary += f"💾 **DATABASE TESTS**\n"
+            summary += "```\n"
+            for result in database_tests:
+                summary += f"{result}\n"
+            summary += "```\n\n"
+            
+        if connection_tests:
+            summary += f"🌐 **CONNECTION TESTS**\n"
+            summary += "```\n"
+            for result in connection_tests:
+                summary += f"{result}\n"
+            summary += "```\n\n"
+            
+        if user_tests:
+            summary += f"👤 **USER TESTS**\n"
+            summary += "```\n"
+            for result in user_tests:
+                summary += f"{result}\n"
+            summary += "```\n\n"
+        
         return summary
     
-    async def run_all_tests(self, discord_id=None):
+    async def run_all_tests(self, interaction=None, discord_id=None, full_test=False):
+        self.interaction = interaction
         self.results = []
         self.success_count = 0
         self.fail_count = 0
+        self.current_test = 0
         
-        # Run all tests
+        # Calculate total tests
+        self.total_tests = 3  # Base tests (database_connection, env_variables, file_permissions)
+        if discord_id:
+            self.total_tests += 3  # User tests (user_exists, encryption_decryption, reminder_system)
+            if full_test:
+                self.total_tests += 6  # Full tests (arbor_connection, selenium_setup(2), browser_functionality, database_integrity(3))
+        
+        # Create initial progress message
+        if self.interaction:
+            try:
+                self.progress_message = await self.interaction.followup.send(
+                    "🔄 **Starting Diagnostics...**\n" +
+                    "┌─────────────────────────────────────┐\n" +
+                    "│ 🟢 **Passed:** 0 | 🔴 **Failed:** 0 │\n" +
+                    "│ 📊 **Progress:** 0.0%              │\n" +
+                    "│ ⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜ │\n" +
+                    "└─────────────────────────────────────┘",
+                    ephemeral=True
+                )
+            except:
+                self.progress_message = None
+        
+        # Run all tests with a small delay between each test to allow progress updates
         self.test_database_connection()
+        await asyncio.sleep(1)  # Add delay for UI update
+        
         self.test_env_variables()
+        await asyncio.sleep(1)  # Add delay for UI update
+        
+        self.test_file_permissions()
+        await asyncio.sleep(1)  # Add delay for UI update
         
         if discord_id:
             self.test_user_exists(discord_id)
+            await asyncio.sleep(1)  # Add delay for UI update
+            
             self.test_encryption_decryption(discord_id)
+            await asyncio.sleep(1)  # Add delay for UI update
+            
             await self.test_reminder_system(discord_id)
+            await asyncio.sleep(1)  # Add delay for UI update
+            
+            if full_test:
+                self.test_arbor_connection(discord_id)
+                await asyncio.sleep(1)  # Add delay for UI update
+                
+                self.test_selenium_setup()
+                await asyncio.sleep(1)  # Add delay for UI update
+                
+                self.test_database_integrity()
+                await asyncio.sleep(1)  # Add delay for UI update
         
-        return self.get_summary()
+        # Get system information
+        system_info = get_system_info()
+        
+        # Combine system info with test results
+        full_report = f"🔍 **ARBORALERT DIAGNOSTIC REPORT** 🔍\n\n"
+        
+        # Add status overview
+        total_tests = self.success_count + self.fail_count
+        success_percentage = (self.success_count / total_tests * 100) if total_tests > 0 else 0
+        bar_length = 20
+        filled_length = int(bar_length * success_percentage / 100)
+        progress_bar = "🟩" * filled_length + "⬜" * (bar_length - filled_length)
+        
+        full_report += f"**Status Overview:**\n"
+        full_report += f"┌─────────────────────────────────────┐\n"
+        full_report += f"│ 🟢 **Tests Passed:** {self.success_count} | 🔴 **Tests Failed:** {self.fail_count} │\n"
+        full_report += f"│ 📊 **Success Rate:** {success_percentage:.1f}%              │\n"
+        full_report += f"│ {progress_bar} │\n"
+        full_report += f"└─────────────────────────────────────┘\n\n"
+        
+        # Add system information section
+        full_report += f"📊 **SYSTEM INFORMATION**\n"
+        full_report += "```\n"
+        full_report += system_info
+        full_report += "\n```\n\n"
+        
+        # Add test results by category
+        database_tests = []
+        connection_tests = []
+        system_tests = []
+        user_tests = []
+        
+        for result in self.results:
+            if "Database" in result:
+                database_tests.append(result)
+            elif "Connection" in result or "Selenium" in result:
+                connection_tests.append(result)
+            elif "File" in result or "Environment" in result:
+                system_tests.append(result)
+            else:
+                user_tests.append(result)
+        
+        if system_tests:
+            full_report += f"⚙️ **SYSTEM TESTS**\n"
+            full_report += "```\n"
+            for result in system_tests:
+                full_report += f"{result}\n"
+            full_report += "```\n\n"
+            
+        if database_tests:
+            full_report += f"💾 **DATABASE TESTS**\n"
+            full_report += "```\n"
+            for result in database_tests:
+                full_report += f"{result}\n"
+            full_report += "```\n\n"
+            
+        if connection_tests:
+            full_report += f"🌐 **CONNECTION TESTS**\n"
+            full_report += "```\n"
+            for result in connection_tests:
+                full_report += f"{result}\n"
+            full_report += "```\n\n"
+            
+        if user_tests:
+            full_report += f"👤 **USER TESTS**\n"
+            full_report += "```\n"
+            for result in user_tests:
+                full_report += f"{result}\n"
+            full_report += "```\n\n"
+        
+        return full_report
     
     def test_database_connection(self):
         try:
@@ -228,21 +433,115 @@ class DebugTests:
         except Exception as e:
             self.add_result("Arbor Connection", False, f"Error: {str(e)}")
 
+    def test_file_permissions(self):
+        try:
+            # Check if key files are readable
+            files_to_check = ["main.py", "database.py", "reminder_system.py", "arbor_processor.py", "bot_commands.py"]
+            missing_files = []
+            
+            for file in files_to_check:
+                if not os.path.exists(file):
+                    missing_files.append(file)
+                elif not os.access(file, os.R_OK):
+                    self.add_result("File Permissions", False, f"Cannot read {file}")
+                    return
+            
+            if missing_files:
+                self.add_result("File Permissions", False, f"Missing files: {', '.join(missing_files)}")
+            else:
+                self.add_result("File Permissions", True, "All required files are present and readable")
+        except Exception as e:
+            self.add_result("File Permissions", False, f"Error checking file permissions: {str(e)}")
+    
+    def test_selenium_setup(self):
+        try:
+            # Test if Selenium and Firefox are properly configured
+            options = Options()
+            options.headless = True
+            
+            # Set a timeout for driver creation
+            driver = None
+            try:
+                driver = webdriver.Firefox(options=options)
+                self.add_result("Selenium Setup", True, "Firefox webdriver initialized successfully")
+                
+                # Test basic browser functionality
+                driver.get("about:blank")
+                if driver.title is not None:
+                    self.add_result("Browser Functionality", True, "Browser can load pages")
+                else:
+                    self.add_result("Browser Functionality", False, "Browser failed to load test page")
+            except Exception as e:
+                self.add_result("Selenium Setup", False, f"Failed to initialize Firefox webdriver: {str(e)}")
+            finally:
+                if driver:
+                    driver.quit()
+        except Exception as e:
+            self.add_result("Selenium Setup", False, f"Error in Selenium test: {str(e)}")
+    
+    def test_database_integrity(self):
+        try:
+            conn = sqlite3.connect("arbor_users.db")
+            cursor = conn.cursor()
+            
+            # Check users table structure
+            cursor.execute("PRAGMA table_info(users)")
+            columns = {column[1] for column in cursor.fetchall()}
+            required_columns = {"id", "discord_id", "username", "password", "reminder_days"}
+            
+            if required_columns.issubset(columns):
+                self.add_result("Users Table Structure", True, "Users table has all required columns")
+            else:
+                missing = required_columns - columns
+                self.add_result("Users Table Structure", False, f"Missing columns: {', '.join(missing)}")
+            
+            # Check reminders table structure
+            cursor.execute("PRAGMA table_info(reminders)")
+            columns = {column[1] for column in cursor.fetchall()}
+            required_columns = {"id", "discord_id", "assignment_name", "due_date", "reminder_date", "sent"}
+            
+            if required_columns.issubset(columns):
+                self.add_result("Reminders Table Structure", True, "Reminders table has all required columns")
+            else:
+                missing = required_columns - columns
+                self.add_result("Reminders Table Structure", False, f"Missing columns: {', '.join(missing)}")
+            
+            # Check for orphaned reminders (reminders without a corresponding user)
+            cursor.execute("""
+                SELECT COUNT(*) FROM reminders r 
+                WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.discord_id = r.discord_id)
+            """)
+            orphaned_count = cursor.fetchone()[0]
+            
+            if orphaned_count == 0:
+                self.add_result("Database Integrity", True, "No orphaned reminders found")
+            else:
+                self.add_result("Database Integrity", False, f"Found {orphaned_count} orphaned reminders")
+                
+            conn.close()
+        except Exception as e:
+            self.add_result("Database Integrity", False, f"Error checking database integrity: {str(e)}")
+
 # Function to get detailed system information
 def get_system_info():
-    info = []
+    # Use a dictionary to organize info by category
+    info_dict = {
+        "Environment": [],
+        "Dependencies": [],
+        "Database": []
+    }
     
-    # Python version
+    # Environment info
+    import platform
     import sys
-    info.append(f"Python version: {sys.version}")
+    info_dict["Environment"].append(f"🖥️  OS: {platform.system()} {platform.release()}")
+    info_dict["Environment"].append(f"🐍 Python: {sys.version.split()[0]}")
     
-    # Selenium version
+    # Dependencies versions
     import selenium
-    info.append(f"Selenium version: {selenium.__version__}")
-    
-    # Discord.py version
     import discord
-    info.append(f"Discord.py version: {discord.__version__}")
+    info_dict["Dependencies"].append(f"🤖 Discord.py: v{discord.__version__}")
+    info_dict["Dependencies"].append(f"🌐 Selenium: v{selenium.__version__}")
     
     # Check Firefox installation
     try:
@@ -250,9 +549,9 @@ def get_system_info():
         options.headless = True
         driver = webdriver.Firefox(options=options)
         driver.quit()
-        info.append("Firefox webdriver: Available")
+        info_dict["Dependencies"].append("🦊 Firefox: ✅ Available")
     except Exception as e:
-        info.append(f"Firefox webdriver: Not available - {str(e)}")
+        info_dict["Dependencies"].append(f"🦊 Firefox: ❌ Not available")
     
     # Database info
     try:
@@ -262,15 +561,29 @@ def get_system_info():
         # Get user count
         cursor.execute("SELECT COUNT(*) FROM users")
         user_count = cursor.fetchone()[0]
-        info.append(f"Database users: {user_count}")
+        info_dict["Database"].append(f"👥 Users: {user_count}")
         
         # Get reminder count
         cursor.execute("SELECT COUNT(*) FROM reminders")
         reminder_count = cursor.fetchone()[0]
-        info.append(f"Database reminders: {reminder_count}")
+        info_dict["Database"].append(f"📝 Total reminders: {reminder_count}")
+        
+        # Get active reminders count
+        cursor.execute("SELECT COUNT(*) FROM reminders WHERE sent = 0")
+        active_reminders = cursor.fetchone()[0]
+        info_dict["Database"].append(f"⏰ Active reminders: {active_reminders}")
         
         conn.close()
     except Exception as e:
-        info.append(f"Database info: Error - {str(e)}")
+        info_dict["Database"].append(f"💾 Database: ❌ Error connecting")
     
-    return "\n".join(info)
+    # Format the output with sections
+    formatted_info = []
+    
+    for section, items in info_dict.items():
+        if items:
+            formatted_info.append(f"== {section} ===")
+            formatted_info.extend(items)
+            formatted_info.append("")
+    
+    return "\n".join(formatted_info).strip()

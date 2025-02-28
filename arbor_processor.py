@@ -3,6 +3,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.firefox.options import Options
 import os
 import re
 import datetime
@@ -15,7 +16,10 @@ def process_arbor_data(discord_id):
     if not username or not password:
         raise Exception("No credentials found for this user.")
 
-    driver = webdriver.Firefox()
+    # Set up Firefox options for headless mode
+    options = Options()
+    options.headless = True
+    driver = webdriver.Firefox(options=options)
     try:
         driver.get(os.getenv("arborurl"))
 

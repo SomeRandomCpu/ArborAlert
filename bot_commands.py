@@ -182,19 +182,13 @@ async def debug_command(bot, interaction, full_test=False, cipher_suite=None):
         
         # Run basic tests or full tests based on parameter
         if full_test:
-            # For full tests, include user-specific tests
-            test_results = await debug_tests.run_all_tests(interaction.user.id)
-            
-            # Also test Arbor connection if doing full test
-            debug_tests.test_arbor_connection(str(interaction.user.id))
+            # For full tests, include user-specific tests with the full_test flag
+            test_results = await debug_tests.run_all_tests(interaction, interaction.user.id, full_test=True)
         else:
             # Basic tests only
-            test_results = await debug_tests.run_all_tests()
+            test_results = await debug_tests.run_all_tests(interaction)
         
-        # Get system information
-        system_info = get_system_info()
-        
-        # Send results
-        await interaction.followup.send(f"**System Information:**\n```\n{system_info}\n```\n\n{test_results}", ephemeral=True)
+        # Send the consolidated results as a single message
+        await interaction.followup.send(test_results, ephemeral=True)
     except Exception as e:
         await interaction.followup.send(f"An error occurred while running diagnostics: {str(e)}\n\nStack trace: ```\n{traceback.format_exc()}\n```", ephemeral=True)
