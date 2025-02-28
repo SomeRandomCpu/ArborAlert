@@ -3,3 +3,4 @@ arbor_users.db
 .DS_Store
 .venv
 .ropeproject
+__pycache__
