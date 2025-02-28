@@ -1,4 +1,5 @@
-selenium
-discord
-cryptography.fernet
-dotenv
+selenium==4.10.0
+discord==2.3.1
+cryptography==41.0.3
+python-dotenv==1.0.0
+schedule==1.2.0
