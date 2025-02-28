@@ -12,6 +12,7 @@ from bot_commands import (
     setup_command, fetch_command, set_reminder_command, view_reminders_command,
     delete_account_command, change_credentials_command, debug_command
 )
+from embed_utils import create_basic_embed, create_error_embed
 
 # Load environment variables
 load_dotenv()

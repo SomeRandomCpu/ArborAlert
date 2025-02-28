@@ -5,6 +5,7 @@ import time
 from threading import Thread
 from database import get_due_reminders, mark_reminder_sent, get_all_users
 from arbor_processor import process_arbor_data
+from embed_utils import create_reminder_embed
 
 # Function to run the scheduler
 def run_scheduler():
@@ -45,7 +46,10 @@ async def check_reminders(bot):
             for discord_id, assignment, due_date in reminders:
                 try:
                     user = await bot.fetch_user(int(discord_id))
-                    await user.send(f"**REMINDER:** Your assignment **{assignment}** is due on {due_date}!")
+                    
+                    # Create a rich embed for the reminder
+                    embed = create_reminder_embed(assignment, due_date)
+                    await user.send(embed=embed)
                     
                     # Mark reminder as sent
                     mark_reminder_sent(discord_id, assignment, due_date)
