@@ -57,7 +57,7 @@ async def setup_command(bot, interaction):
             if os.path.exists("arbor_processed_text.txt"):
                 os.remove("arbor_processed_text.txt")
     except Exception as e:
-        error_embed = create_error_embed(f"An error occurred: {e}")
+        error_embed = create_error_embed(f"I encountered an error during account setup: {e}")
         await interaction.user.send(embed=error_embed)
 
 # Fetch command
@@ -83,7 +83,7 @@ async def fetch_command(interaction):
             await interaction.followup.send(embed=error_embed, ephemeral=True)
             return
     except Exception as e:
-        error_embed = create_error_embed(f"Critical error occurred: {e}")
+        error_embed = create_error_embed(f"I encountered an error while fetching your assignments: {e}")
         await interaction.followup.send(embed=error_embed, ephemeral=True)
         return
     finally:
@@ -105,7 +105,7 @@ async def set_reminder_command(interaction, days_before):
         )
         await interaction.response.send_message(embed=success_embed, ephemeral=True)
     except Exception as e:
-        error_embed = create_error_embed(f"An error occurred: {e}")
+        error_embed = create_error_embed(f"I encountered an error while retrieving your reminders: {e}")
         await interaction.response.send_message(embed=error_embed, ephemeral=True)
 
 # View reminders command
@@ -118,7 +118,7 @@ async def view_reminders_command(interaction):
         reminders_embed = create_reminders_list_embed(reminders)
         await interaction.response.send_message(embed=reminders_embed, ephemeral=True)
     except Exception as e:
-        error_embed = create_error_embed(f"An error occurred: {e}")
+        error_embed = create_error_embed(f"I encountered an error while retrieving your reminders: {e}")
         await interaction.response.send_message(embed=error_embed, ephemeral=True)
 
 # Delete account command
@@ -171,7 +171,7 @@ async def delete_account_command(bot, interaction):
             await interaction.user.send(embed=timeout_embed)
             
     except Exception as e:
-        error_embed = create_error_embed(f"An error occurred while trying to delete your account: {e}")
+        error_embed = create_error_embed(f"I encountered an error while deleting your account: {e}")
         await interaction.user.send(embed=error_embed)
 
 # Change credentials command
@@ -223,18 +223,30 @@ async def change_credentials_command(bot, interaction):
             await interaction.user.send(embed=timeout_embed)
             
     except Exception as e:
-        error_embed = create_error_embed(f"An error occurred while updating your credentials: {e}")
+        error_embed = create_error_embed(f"I encountered an error while updating credentials: {e}")
         await interaction.user.send(embed=error_embed)
 
 # Debug command
-async def debug_command(bot, interaction, full_test=False, cipher_suite=None):
+async def debug_command(bot, interaction, full_test=False, cipher_suite=None, test_error=None):
     """Run diagnostic tests on the bot to identify issues"""
     try:
-        # Check if user is authorized (can be expanded with admin checks)
-        await interaction.response.defer(ephemeral=True)
-        
+        # Check if a test error message was provided
+        if test_error:
+            # Simulate an error for testing purposes
+            error_embed = create_error_embed(f"TEST ERROR: {test_error}")
+            await interaction.response.send_message(embed=error_embed, ephemeral=True)
+            return
+            
         # Initialize debug tests
         debug_tests = DebugTests(bot, cipher_suite)
+        
+        # Show initial status message
+        info_embed = create_basic_embed(
+            "Running Diagnostics", 
+            "Running diagnostic tests on ArborAlert. This may take a moment...", 
+            "info"
+        )
+        await interaction.response.send_message(embed=info_embed, ephemeral=True)
         
         # Run basic tests or full tests based on parameter
         if full_test:
@@ -244,7 +256,13 @@ async def debug_command(bot, interaction, full_test=False, cipher_suite=None):
             # Basic tests only
             test_results = await debug_tests.run_all_tests(interaction)
         
-        # Send the consolidated results as a single message
+        # Send the consolidated results as a followup message
         await interaction.followup.send(test_results, ephemeral=True)
     except Exception as e:
-        await interaction.followup.send(f"An error occurred while running diagnostics: {str(e)}\n\nStack trace: ```\n{traceback.format_exc()}\n```", ephemeral=True)
+        error_embed = create_error_embed(f"I encountered an error while running diagnostics: {e}")
+        
+        # Check if the initial response has been sent
+        if interaction.response.is_done():
+            await interaction.followup.send(embed=error_embed, ephemeral=True)
+        else:
+            await interaction.response.send_message(embed=error_embed, ephemeral=True)

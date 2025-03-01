@@ -13,6 +13,7 @@ from bot_commands import (
     delete_account_command, change_credentials_command, debug_command
 )
 from embed_utils import create_basic_embed, create_error_embed
+from ai_handler import process_message
 
 # Load environment variables
 load_dotenv()
@@ -43,6 +44,14 @@ async def on_ready():
         bot.loop.create_task(check_reminders(bot))
     except Exception as e:
         print(f"Failed to sync commands: {e}")
+
+@bot.event
+async def on_message(message):
+    # Process commands first
+    await bot.process_commands(message)
+    
+    # Then process natural language
+    await process_message(message, bot)
 
 # Register commands
 @bot.tree.command(name="setup")
@@ -76,9 +85,9 @@ async def change_credentials(interaction: discord.Interaction):
     await change_credentials_command(bot, interaction)
 
 @bot.tree.command(name="debug")
-async def debug(interaction: discord.Interaction, full_test: bool = False):
+async def debug(interaction: discord.Interaction, full_test: bool = False, test_error: str = None):
     """Run diagnostic tests on the bot to identify issues"""
-    await debug_command(bot, interaction, full_test, cipher_suite)
+    await debug_command(bot, interaction, full_test, cipher_suite, test_error)
 
 # Run the bot
 if __name__ == "__main__":

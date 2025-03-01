@@ -167,7 +167,7 @@ def create_welcome_embed(username):
 # Create an error embed
 def create_error_embed(error_message):
     """Create an embed for error messages"""
-    embed = create_basic_embed("Error Occurred", error_message, "error")
+    embed = create_basic_embed("Error", f"An error occurred: {error_message}", "error")
     return embed
 
 # Create a confirmation embed

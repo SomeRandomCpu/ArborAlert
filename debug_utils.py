@@ -4,6 +4,7 @@ import os
 import datetime
 import traceback
 import asyncio
+import re
 from cryptography.fernet import Fernet
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
@@ -127,6 +128,65 @@ class DebugTests:
         
         return summary
     
+    async def test_ai_system(self, discord_id=None):
+        try:
+            # Check if ai_handler.py exists and is readable
+            if not os.path.exists("ai_handler.py"):
+                self.add_result("AI System", False, "ai_handler.py file not found")
+                return
+                
+            if not os.access("ai_handler.py", os.R_OK):
+                self.add_result("AI System", False, "Cannot read ai_handler.py file")
+                return
+                
+            # Check if the required functions exist in the module
+            import importlib
+            import inspect
+            
+            try:
+                # Try to import the module
+                ai_module = importlib.import_module("ai_handler")
+                
+                # Check for process_message function
+                if not hasattr(ai_module, "process_message") or not inspect.iscoroutinefunction(ai_module.process_message):
+                    self.add_result("AI System", False, "process_message function not found or not async")
+                    return
+                    
+                # Check for BaseMockInteraction class
+                if not hasattr(ai_module, "BaseMockInteraction"):
+                    self.add_result("AI System", False, "BaseMockInteraction class not found")
+                    return
+                    
+                # Check for handler functions
+                required_handlers = ["handle_fetch_request", "handle_set_reminder", "handle_view_reminders", 
+                                    "handle_setup", "handle_change_credentials", "handle_delete_account", 
+                                    "handle_debug"]
+                                    
+                missing_handlers = []
+                for handler in required_handlers:
+                    if not hasattr(ai_module, handler) or not inspect.iscoroutinefunction(getattr(ai_module, handler)):
+                        missing_handlers.append(handler)
+                
+                if missing_handlers:
+                    self.add_result("AI System", False, f"Missing handler functions: {', '.join(missing_handlers)}")
+                    return
+                    
+                # Check for PATTERNS dictionary
+                if not hasattr(ai_module, "PATTERNS") or not isinstance(ai_module.PATTERNS, dict):
+                    self.add_result("AI System", False, "PATTERNS dictionary not found")
+                    return
+                    
+                # All checks passed
+                self.add_result("AI System", True, "AI system components verified successfully")
+                
+            except ImportError as e:
+                self.add_result("AI System", False, f"Error importing ai_handler module: {str(e)}")
+            except Exception as e:
+                self.add_result("AI System", False, f"Error checking AI system: {str(e)}")
+                
+        except Exception as e:
+            self.add_result("AI System", False, f"Error: {str(e)}")
+            
     async def run_all_tests(self, interaction=None, discord_id=None, full_test=False):
         self.interaction = interaction
         self.results = []
@@ -134,8 +194,8 @@ class DebugTests:
         self.fail_count = 0
         self.current_test = 0
         
-        # Calculate total tests
-        self.total_tests = 3  # Base tests (database_connection, env_variables, file_permissions)
+        # Update total tests to include AI tests
+        self.total_tests = 4  # Base tests (database_connection, env_variables, file_permissions, ai_system)
         if discord_id:
             self.total_tests += 3  # User tests (user_exists, encryption_decryption, reminder_system)
             if full_test:
@@ -149,7 +209,7 @@ class DebugTests:
                     "┌─────────────────────────────────────┐\n" +
                     "│ 🟢 **Passed:** 0 | 🔴 **Failed:** 0 │\n" +
                     "│ 📊 **Progress:** 0.0%              │\n" +
-                    "│ ⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜ │\n" +
+                    "│ ⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜ │\n" +
                     "└─────────────────────────────────────┘",
                     ephemeral=True
                 )
@@ -164,6 +224,10 @@ class DebugTests:
         await asyncio.sleep(1)  # Add delay for UI update
         
         self.test_file_permissions()
+        await asyncio.sleep(1)  # Add delay for UI update
+        
+        # Add AI system test
+        await self.test_ai_system(discord_id)
         await asyncio.sleep(1)  # Add delay for UI update
         
         if discord_id:
