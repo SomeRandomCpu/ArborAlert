@@ -309,6 +309,11 @@ async def process_message(message, bot):
             elif ("debug" in pattern or "diagnose" in pattern or "test" in pattern or "troubleshoot" in pattern) and match:
                 await handle_debug(message, bot)
                 return
+                
+            # Help actions
+            elif ("help" in pattern or "guide" in pattern or "how" in pattern or "what can you do" in pattern) and match:
+                await handle_help(message, bot)
+                return
             
             # For simple responses
             response = random.choice(responses)
@@ -463,3 +468,19 @@ async def send_registration_required(message):
         "warning"
     )
     await message.channel.send(embed=embed)
+
+async def handle_help(message, bot):
+    """Handle a natural language request for help"""
+    from help_command import help_command
+    
+    embed = create_basic_embed("Help Guide", "Let me show you how to use ArborAlert...", "info")
+    response_msg = await message.channel.send(embed=embed)
+    
+    # Use the BaseMockInteraction class
+    mock_interaction = BaseMockInteraction(message, response_msg)
+    
+    try:
+        await help_command(mock_interaction)
+    except Exception as e:
+        embed = create_basic_embed("Error", f"I encountered an error while displaying help: {str(e)}", "error")
+        await response_msg.edit(embed=embed)

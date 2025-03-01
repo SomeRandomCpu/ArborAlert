@@ -14,6 +14,7 @@ from bot_commands import (
 )
 from embed_utils import create_basic_embed, create_error_embed
 from ai_handler import process_message
+from help_command import help_command
 
 # Load environment variables
 load_dotenv()
@@ -47,9 +48,17 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
+    # Skip processing if message is from a bot
+    if message.author.bot:
+        return
+        
     # Process commands first
     await bot.process_commands(message)
     
+    # Skip natural language processing if in DM and waiting for command input
+    if isinstance(message.channel, discord.DMChannel) and message.content.lower() in ['yes', 'no']:
+        return
+        
     # Then process natural language
     await process_message(message, bot)
 
@@ -88,6 +97,11 @@ async def change_credentials(interaction: discord.Interaction):
 async def debug(interaction: discord.Interaction, full_test: bool = False, test_error: str = None):
     """Run diagnostic tests on the bot to identify issues"""
     await debug_command(bot, interaction, full_test, cipher_suite, test_error)
+
+@bot.tree.command(name="help")
+async def help(interaction: discord.Interaction):
+    """Get detailed help on using ArborAlert's commands and AI features"""
+    await help_command(interaction)
 
 # Run the bot
 if __name__ == "__main__":
